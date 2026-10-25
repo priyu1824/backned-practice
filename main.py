@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -14,7 +14,9 @@ books = {
 
 @app.get("/books/{book_id}")
 def get_book(book_id: int):
-    return books.get(book_id, {"error": "Book not found"})
+    if book_id not in books:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return books[book_id]
 
 @app.get("/books")
 def list_books(author: str | None = None):
@@ -22,8 +24,21 @@ def list_books(author: str | None = None):
         return [b for b in books.values() if author.lower() in b["author"].lower()]
     return list(books.values())
 
-@app.post("/books")
+@app.post("/books", status_code=status.HTTP_201_CREATED)
 def add_book(book: Book):
-    new_id = max(books)+1
+    new_id = max(books, default=0)+1
     books[new_id] = book.model_dump()
     return {"id": new_id, **books[new_id]}
+
+@app.put("/books/{book_id}")
+def update_book(book_id: int, book: Book):
+    if book_id not in books:
+        raise HTTPException(status_code=404, detail="Book not found")
+    books[book_id] = book.model_dump()
+    return {"id":book_id, **books[book_id]}
+
+@app.delete("/books/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_book(book_id: int):
+    if book_id not in books:
+        raise HTTPException(status_code= 404, detail="Book not found")
+    del books[book_id]
