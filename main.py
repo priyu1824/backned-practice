@@ -1,5 +1,16 @@
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from database import SessionLocal
+from models import BookModel
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI()
 
@@ -13,16 +24,18 @@ books = {
 }
 
 @app.get("/books/{book_id}")
-def get_book(book_id: int):
-    if book_id not in books:
+def get_book(book_id: int, db: Session = Depends(get_db)):
+    book = db.query(BookModel).filter(BookModel.id == book_id).first()
+    if book is None:
         raise HTTPException(status_code=404, detail="Book not found")
-    return books[book_id]
+    return book
 
 @app.get("/books")
-def list_books(author: str | None = None):
+def list_books(author: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(BookModel)
     if author:
-        return [b for b in books.values() if author.lower() in b["author"].lower()]
-    return list(books.values())
+       query = query.filter(BookModel.author.ilike(f"%{author}%"))
+    return query.all()
 
 @app.post("/books", status_code=status.HTTP_201_CREATED)
 def add_book(book: Book):
