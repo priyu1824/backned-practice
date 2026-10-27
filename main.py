@@ -38,10 +38,12 @@ def list_books(author: str | None = None, db: Session = Depends(get_db)):
     return query.all()
 
 @app.post("/books", status_code=status.HTTP_201_CREATED)
-def add_book(book: Book):
-    new_id = max(books, default=0)+1
-    books[new_id] = book.model_dump()
-    return {"id": new_id, **books[new_id]}
+def add_book(book: Book, db : Session = Depends(get_db)):
+    new_book = BookModel(title= book.title, author= book.author)
+    db.add(new_book)
+    db.commit()
+    db.refresh(new_book)
+    return new_book
 
 @app.put("/books/{book_id}")
 def update_book(book_id: int, book: Book):
