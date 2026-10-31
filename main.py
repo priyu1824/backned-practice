@@ -2,8 +2,12 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from database import SessionLocal
-from models import BookModel
+from database import SessionLocal, engine, Base
+from models import BookModel, UserModel
+from security import hash_password
+
+
+Base.metadata.create_all(bind=engine)
 
 def get_db():
     db = SessionLocal()
@@ -17,6 +21,10 @@ app = FastAPI()
 class Book(BaseModel):
     title: str
     author: str
+
+class UserCreate(BaseModel):
+    email: str
+    password: str
 
 books = {
     1: {"title": "Harry Potter", "author": "JK Rowling"},
@@ -63,3 +71,16 @@ def delete_book(book_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Book not found")
     db.delete(existing)
     db.commit()
+
+@app.post("/register", status_code=status.HTTP_201_CREATED)
+def user_create(user: UserCreate, db: Session= Depends(get_db)):
+    existing = db.query(UserModel).filter(UserModel.email == user.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail= "User already exists")
+    new_user = UserModel(email = user.email, hashed_password = hash_password(user.password))
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"id": new_user.id, "email": new_user.email}
+
+

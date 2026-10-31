@@ -7,3 +7,10 @@ class BookModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     author = Column(String(100), nullable=False)
+
+class UserModel(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
