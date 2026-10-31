@@ -4,7 +4,8 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from models import BookModel, UserModel
-from security import hash_password
+from security import hash_password, verify_password, create_access_token
+from fastapi.security import OAuth2PasswordRequestForm
 
 
 Base.metadata.create_all(bind=engine)
@@ -82,5 +83,12 @@ def user_create(user: UserCreate, db: Session= Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     return {"id": new_user.id, "email": new_user.email}
+
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.email == form_data.username).first()
+    if user is None or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    return {"access_token": create_access_token(user.email), "token_type": "bearer"}
 
 
