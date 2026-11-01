@@ -4,9 +4,9 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 from database import SessionLocal, engine, Base
 from models import BookModel, UserModel
-from security import hash_password, verify_password, create_access_token
-from fastapi.security import OAuth2PasswordRequestForm
-
+from security import hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+import jwt
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,6 +18,19 @@ def get_db():
         db.close()
 
 app = FastAPI()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = db.query(UserModel).filter(UserModel.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 class Book(BaseModel):
     title: str
@@ -47,7 +60,7 @@ def list_books(author: str | None = None, db: Session = Depends(get_db)):
     return query.all()
 
 @app.post("/books", status_code=status.HTTP_201_CREATED)
-def add_book(book: Book, db : Session = Depends(get_db)):
+def add_book(book: Book, db : Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     new_book = BookModel(title= book.title, author= book.author)
     db.add(new_book)
     db.commit()
@@ -55,7 +68,7 @@ def add_book(book: Book, db : Session = Depends(get_db)):
     return new_book
 
 @app.put("/books/{book_id}")
-def update_book(book_id: int, book: Book, db: Session = Depends(get_db)):
+def update_book(book_id: int, book: Book, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     existing = db.query(BookModel).filter(BookModel.id == book_id).first()
     if existing is None:
         raise HTTPException(status_code=404, detail="Book not found")
@@ -66,7 +79,7 @@ def update_book(book_id: int, book: Book, db: Session = Depends(get_db)):
     return existing
 
 @app.delete("/books/{book_id}", status_code=204)
-def delete_book(book_id: int, db: Session = Depends(get_db)):
+def delete_book(book_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     existing = db.query(BookModel).filter(BookModel.id == book_id).first()
     if existing is None:
         raise HTTPException(status_code=404, detail="Book not found")
